@@ -9,7 +9,7 @@ async function bootstrap() {
 
   // Enable CORS with environment-based configuration
   app.enableCors({
-    origin: process.env.CORS_ORIGIN ?? 'http://localhost:5173',
+    origin: process.env.CORS_ORIGIN ?? 'https://deluxefloormate.com',
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
