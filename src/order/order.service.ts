@@ -74,7 +74,14 @@ export class OrderService {
         },
         include: {
           orderItems: true,
-          deliveryAddress: true,
+          deliveryAddress: {
+            select: {
+              firstName: true,
+              lastName: true,
+              mobile: true,
+              address: true,
+            },
+          },
           user: {
             select: {
               firstName: true,
@@ -115,6 +122,22 @@ export class OrderService {
       },
       include: {
         orderItems: true,
+        deliveryAddress: {
+          select: {
+            firstName: true,
+            lastName: true,
+            mobile: true,
+            address: true,
+          },
+        },
+        user: {
+          select: {
+            firstName: true,
+            lastName: true,
+            email: true,
+            mobile: true,
+          },
+        },
       },
     });
 
