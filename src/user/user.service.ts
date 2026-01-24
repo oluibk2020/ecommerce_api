@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  Inject,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
@@ -11,16 +12,29 @@ import { PostgresError } from '../errors/errors.interface';
 import { RegisterCredentialsDto } from 'src/user/dto/register-credentials.dto';
 import { EmailService } from '../email/email.service';
 import { Message, ResponseMessage } from '../helpers/message.interface';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Cache } from 'cache-manager';
 
 @Injectable()
 export class UserService {
   constructor(
     private prisma: PrismaService,
     private readonly emailService: EmailService,
+    @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {}
 
   async getUsers() {
-    return await this.prisma.user.findMany({
+    const cacheKey = 'all_users';
+
+    // 🔍 Step 1: Check cache first
+    const cachedUsers = await this.cacheManager.get(cacheKey);
+
+    if (cachedUsers) {
+      console.log('⚡ Returning users from Redis cache');
+      return cachedUsers;
+    }
+
+    const users = await this.prisma.user.findMany({
       select: {
         email: true,
         firstName: true,
@@ -28,6 +42,11 @@ export class UserService {
         mobile: true,
       },
     });
+
+    // 💾 Step 3: Save to cache for 60 seconds
+    await this.cacheManager.set(cacheKey, users, 60_000);
+
+    return users;
   }
 
   async getUserByEmail(email: string): Promise<{
@@ -35,20 +54,47 @@ export class UserService {
     firstName: string;
     lastName: string;
     mobile: string;
+    id: number;
+    isManager: boolean;
+    isAdmin: boolean;
   }> {
+    const cacheKey = `user:${email}`;
+
+    // 🔍 1. Check Redis cache first
+    const cachedUser:
+      | {
+          email: string;
+          firstName: string;
+          lastName: string;
+          mobile: string;
+          id: number;
+          isManager: boolean;
+          isAdmin: boolean;
+        }
+      | undefined = await this.cacheManager.get(cacheKey);
+    if (cachedUser) {
+      console.log('⚡ User returned from Redis cache');
+      return cachedUser;
+    }
     const found = await this.prisma.user.findFirst({
       where: { email },
       select: {
+        id: true,
         email: true,
         firstName: true,
         lastName: true,
         mobile: true,
+        isManager: true,
+        isAdmin: true,
       },
     });
 
     if (!found) {
       throw new NotFoundException('User not found');
     } else {
+      // 💾 3. Store in Redis for 60 * 60 seconds
+      await this.cacheManager.set(cacheKey, found, 60 * 60_000);
+
       return found;
     }
   }
@@ -65,6 +111,9 @@ export class UserService {
       where: { email },
       data: { isManager: managerRoleStatus },
     });
+
+    //clear user cache
+    await this.cacheManager.del(`user:${email}`);
 
     return { message: Message.success };
   }
@@ -92,6 +141,9 @@ export class UserService {
           lastName,
         },
       });
+
+      //clear user cache
+      await this.cacheManager.del('all_users');
 
       return { message: Message.success };
     } catch (error) {

@@ -1,4 +1,5 @@
 import {
+  Inject,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
@@ -12,12 +13,25 @@ import {
 } from './dto/product.dto';
 import { QueryProductDto } from './dto/query-products.dto';
 import { Message, ResponseMessage } from 'src/helpers/message.interface';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Cache } from 'cache-manager';
 
 @Injectable()
 export class ProductService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    @Inject(CACHE_MANAGER) private cacheManager: Cache,
+  ) {}
 
   async getAllProducts(): Promise<ProductWithIdDto[]> {
+    const cacheKey = 'all_products';
+
+    const cachedProducts =
+      await this.cacheManager.get<ProductWithIdDto[]>(cacheKey);
+
+    if (cachedProducts) {
+      return cachedProducts;
+    }
     const products = await this.prisma.product.findMany({
       select: {
         id: true,
@@ -33,10 +47,20 @@ export class ProductService {
     if (!products) {
       throw new NotFoundException('Product not found');
     } else {
+      // 💾 Step 3: Save to cache for 6000 seconds
+      await this.cacheManager.set(cacheKey, products, 6_000_000);
       return products;
     }
   }
   async getAllFeaturedProducts(): Promise<FeaturedProductWithIdDto[]> {
+    const cacheKey = 'all_featured_products';
+
+    const cachedProducts =
+      await this.cacheManager.get<FeaturedProductWithIdDto[]>(cacheKey);
+
+    if (cachedProducts) {
+      return cachedProducts;
+    }
     const products = await this.prisma.product.findMany({
       select: {
         id: true,
@@ -56,11 +80,21 @@ export class ProductService {
     if (!products) {
       throw new NotFoundException('No featured Product found');
     } else {
+      // 💾 Step 3: Save to cache for 6000 seconds
+      await this.cacheManager.set(cacheKey, products, 6_000_000);
       return products;
     }
   }
 
   async getProductById(id: number): Promise<ProductWithIdDto> {
+    const cacheKey = `product:${id}`;
+
+    const cachedProduct =
+      await this.cacheManager.get<ProductWithIdDto>(cacheKey);
+
+    if (cachedProduct) {
+      return cachedProduct;
+    }
     const product = await this.prisma.product.findUnique({
       where: {
         id: Number(id),
@@ -80,6 +114,8 @@ export class ProductService {
     if (!product) {
       throw new NotFoundException(`Product with ID "${id}" not found`);
     }
+    // 💾 3. Store in Redis for 60 seconds
+    await this.cacheManager.set(cacheKey, product, 6_000_000);
     //otherwise, return the task
     return product;
   }
@@ -98,6 +134,9 @@ export class ProductService {
     if (!deletedProduct) {
       throw new NotFoundException(`Product with ID "${productId}" not found`);
     }
+
+    //clear product cache
+    await this.cacheManager.del(`product:${productId}`);
 
     return { message: Message.success };
   }
@@ -188,6 +227,11 @@ export class ProductService {
         },
       });
 
+      //clear all product and featured products cache
+      await this.cacheManager.del('all_products');
+      await this.cacheManager.del('all_featured_products');
+      await this.cacheManager.del(`product:${convertedId}`);
+
       return { message: Message.success };
     } catch (error) {
       console.log(error);
@@ -221,6 +265,10 @@ export class ProductService {
           featured: Boolean(featured),
         },
       });
+
+      //clear all product and featured products cache
+      await this.cacheManager.del('all_products');
+      await this.cacheManager.del('all_featured_products');
 
       return { message: Message.success };
     } catch (error) {

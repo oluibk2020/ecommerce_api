@@ -59,6 +59,12 @@ model User{
   lastName String
   createdAt DateTime @default(now())
   updatedAt DateTime? @updatedAt
+
+  // 2FA fields
+  twoFactorSecret String?           // TOTP secret
+  twoFactorEnabled Boolean @default(false)
+  twoFactorBackupCodes String[]     // Backup codes as JSON
+
 //user to deliveryAd
   deliveryaddress DeliveryAddress[]
 

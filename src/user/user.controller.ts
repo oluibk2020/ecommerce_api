@@ -1,16 +1,8 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Patch,
-  Post,
-  Req,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Get, Patch, Post, Req } from '@nestjs/common';
 import { UserService } from './user.service';
 import { RegisterCredentialsDto } from 'src/user/dto/register-credentials.dto';
 import { UpdateUserRoleDto } from './dto/update-user-role.dto';
-import { AuthGuard } from '@nestjs/passport';
+
 import { Logger } from '@nestjs/common';
 import { Request } from 'express'; // <-- import Request type
 import { AdminOnly } from 'src/auth/guards/admin-decorator';
@@ -20,6 +12,12 @@ import { ResponseMessage } from 'src/helpers/message.interface';
 export class UserController {
   private logger = new Logger('TasksController');
   constructor(private usersService: UserService) {}
+
+  @Get('/all')
+  async getUsers() {
+    this.logger.verbose(`Getting all users`);
+    return this.usersService.getUsers();
+  }
 
   //protect this route
   @AdminOnly()
