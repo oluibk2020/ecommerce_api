@@ -21,7 +21,7 @@ import { TwoFactorService } from './services/two-factor.service';
       useFactory: async (configService: ConfigService) => ({
         secret: configService.get<string>('jwt.secret'),
         signOptions: {
-          expiresIn: Number(3200),
+          expiresIn: Number(configService.get<string>('jwt.expiresIn')),
         },
       }),
     }),
