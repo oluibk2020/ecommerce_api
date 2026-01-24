@@ -23,13 +23,13 @@ import { redisStore } from 'cache-manager-redis-yet';
       isGlobal: true,
       useFactory: async () => {
         const host = process.env.REDIS_HOST ?? '127.0.0.1';
-        const password = process.env.REDIS_PASSWORD ?? '';
+        // const password = process.env.REDIS_PASSWORD ?? '';
         const port = Number(process.env.REDIS_PORT ?? 6379);
 
         try {
           const store = await redisStore({
             socket: { host, port },
-            password: password,
+            // password: password,
           });
           return {
             store: store as any,
