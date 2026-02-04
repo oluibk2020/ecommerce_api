@@ -259,7 +259,7 @@ export class ProductService {
           description: description.trim().toLowerCase(),
           price: parseFloat(price.toFixed(2)),
           imageUrl,
-          categoryId,
+          category: { connect: { id: Number(categoryId) } }, // use connect method
           quantity: Number(quantity),
           cost: parseFloat(cost.toFixed(2)),
           featured: Boolean(featured),
