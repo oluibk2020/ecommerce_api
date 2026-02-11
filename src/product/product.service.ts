@@ -137,6 +137,9 @@ export class ProductService {
 
     //clear product cache
     await this.cacheManager.del(`product:${productId}`);
+    //clear all product and featured products cache
+    await this.cacheManager.del('all_products');
+    await this.cacheManager.del('all_featured_products');
 
     return { message: Message.success };
   }
