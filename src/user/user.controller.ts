@@ -13,10 +13,28 @@ export class UserController {
   private logger = new Logger('TasksController');
   constructor(private usersService: UserService) {}
 
+  //protect this route
+  @AdminOnly()
   @Get('/all')
   async getUsers() {
     this.logger.verbose(`Getting all users`);
     return this.usersService.getUsers();
+  }
+
+  //protect this route
+  @AdminOnly()
+  @Get('/managers')
+  async getAllManagers(): Promise<
+    {
+      email: string;
+      firstName: string;
+      lastName: string;
+      mobile: string;
+      isManager: boolean;
+    }[]
+  > {
+    this.logger.verbose(`Getting all managers`);
+    return this.usersService.getManagerUsers();
   }
 
   //protect this route

@@ -114,8 +114,60 @@ export class UserService {
 
     //clear user cache
     await this.cacheManager.del(`user:${email}`);
+    //clear users and manager users cache
+    await this.cacheManager.del('all_users');
+    await this.cacheManager.del('all_manager_users');
 
     return { message: Message.success };
+  }
+
+  //get all users whose role is manager and cache them
+  async getManagerUsers(): Promise<
+    {
+      email: string;
+      firstName: string;
+      lastName: string;
+      mobile: string;
+      isManager: boolean;
+    }[]
+  > {
+    const cacheKey = 'all_manager_users';
+
+    // 🔍 Step 1: Check cache first
+    const cachedUsers = await this.cacheManager.get<
+      {
+        email: string;
+        firstName: string;
+        lastName: string;
+        mobile: string;
+        isManager: boolean;
+      }[]
+    >(cacheKey);
+
+    if (cachedUsers) {
+      console.log('⚡ Returning users from Redis cache');
+      return cachedUsers;
+    }
+
+    const users = await this.prisma.user.findMany({
+      where: { isManager: true },
+      select: {
+        email: true,
+        firstName: true,
+        lastName: true,
+        mobile: true,
+        isManager: true,
+      },
+    });
+
+    if (!users) {
+      throw new NotFoundException('No manager user found');
+    }
+
+    // 💾 Step 3: Save to cache for 60 seconds
+    await this.cacheManager.set(cacheKey, users, 600_000);
+
+    return users;
   }
 
   //create user
@@ -142,8 +194,9 @@ export class UserService {
         },
       });
 
-      //clear user cache
+      //clear users and manager users cache
       await this.cacheManager.del('all_users');
+      await this.cacheManager.del('all_manager_users');
 
       return { message: Message.success };
     } catch (error) {
