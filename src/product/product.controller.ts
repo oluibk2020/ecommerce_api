@@ -54,21 +54,28 @@ export class ProductController {
   }
 
   @Get('/s')
-  async queryProducts(
-    @Query() queryProductDto: QueryProductDto,
-  ): Promise<{ products: ProductWithIdDto[]; totalPages: number }> {
+  async queryProducts(@Query() queryProductDto: QueryProductDto): Promise<{
+    products: ProductWithIdDto[];
+    meta: { totalPages: number; totalProducts: number; lastPage: number };
+  }> {
     return this.productService.queryProducts(queryProductDto);
   }
 
-  @Get()
-  async getAllProducts(): Promise<ProductWithIdDto[]> {
-    return this.productService.getAllProducts();
-  }
+  // @Get()
+  // async getAllProducts(): Promise<{
+  //   data: ProductWithIdDto[];
+  //   meta: { total: number; lastPage: number; page: number };
+  // }> {
+  //   return this.productService.getAllProducts();
+  // }
 
-  @Get('/featured')
-  async getAllFeaturedProducts(): Promise<FeaturedProductWithIdDto[]> {
-    return this.productService.getAllFeaturedProducts();
-  }
+  // @Get('/featured')
+  // async getAllFeaturedProducts(): Promise<{
+  //   data: FeaturedProductWithIdDto[];
+  //   meta: { total: number; lastPage: number; page: number };
+  // }> {
+  //   return this.productService.getAllFeaturedProducts();
+  // }
 
   @Get('/:id')
   async getProductById(@Param('id') id: string): Promise<ProductWithIdDto> {

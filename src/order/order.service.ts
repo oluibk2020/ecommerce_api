@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  Inject,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
@@ -13,12 +14,17 @@ import { CreateOrderDto } from './dto/create-order.dto';
 import { TransactionStatus } from '../helpers/general-enum';
 import { EmailService } from 'src/email/email.service';
 import { Message, ResponseMessage } from 'src/helpers/message.interface';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Cache } from 'cache-manager';
+import { QueryOrderDto } from './dto/query-orders.dto';
 
 @Injectable()
 export class OrderService {
+  private readonly ORDER_CACHE_VERSION_KEY = 'orders_cache_version';
   private adminEmail: string;
   constructor(
     private prisma: PrismaService,
+    @Inject(CACHE_MANAGER) private cacheManager: Cache,
     private productService: ProductService,
     private configService: ConfigService,
     private readonly emailService: EmailService,
@@ -26,40 +32,124 @@ export class OrderService {
     this.adminEmail = String(this.configService.get<string>('adminEmail'));
   }
 
+  private async bumpOrderCacheVersion(): Promise<void> {
+    const newVersion = Date.now(); // unique and always increasing
+
+    await this.cacheManager.set(
+      this.ORDER_CACHE_VERSION_KEY,
+      newVersion,
+      0, // no TTL
+    );
+  }
+
+  private async getOrderCacheVersion(): Promise<number> {
+    const version = await this.cacheManager.get<number>(
+      this.ORDER_CACHE_VERSION_KEY,
+    );
+
+    return version ?? 1;
+  }
+
   async getAllOrders(
     req: JwtUser,
-  ): Promise<{ firstName: string; orders: any[] }> {
-    const { isAdmin, isManager, firstName, sub } = req;
-    if (isAdmin || isManager) {
-      // If the user is an admin, fetch all orders
+    queryOrderDto: QueryOrderDto,
+  ): Promise<{
+    firstName: string;
+    orders: any[];
+    meta: { totalPages: number; totalOrders: number; lastPage: number };
+  }> {
+    try {
+      const { isAdmin, isManager, firstName, sub } = req;
+      const { page = 1, limit = 20 } = queryOrderDto;
+      // Calculate offset based on page and limit
+      const offset = (page - 1) * limit;
+      const version = await this.getOrderCacheVersion();
+
+      const cacheKey = `v${version}_orders_page_${page}_limit_${limit}`;
+
+      const cachedOrders = await this.cacheManager.get<{
+        firstName: string;
+        orders: any[];
+        meta: { totalPages: number; totalOrders: number; lastPage: number };
+      }>(cacheKey);
+
+      if (cachedOrders) {
+        return cachedOrders;
+      }
+      if (isAdmin || isManager) {
+        // If the user is an admin, fetch all orders
+        const orders = await this.prisma.order.findMany({
+          include: {
+            orderItems: true,
+            deliveryAddress: true,
+            user: {
+              select: {
+                firstName: true,
+                lastName: true,
+                email: true,
+                mobile: true,
+              },
+            },
+          },
+          take: Number(limit),
+          skip: Number(offset),
+          orderBy: {
+            updatedAt: 'desc',
+          },
+        });
+
+        const totalOrders = await this.prisma.order.count();
+        const totalPages = Math.ceil(totalOrders / limit);
+        const lastPage = totalPages === 0 ? 1 : totalPages;
+
+        await this.cacheManager.set(
+          cacheKey,
+          { firstName, orders, meta: { totalPages, totalOrders, lastPage } },
+          2_600_000,
+        );
+
+        return {
+          firstName: firstName,
+          orders,
+          meta: { totalPages, totalOrders, lastPage },
+        };
+      }
+
       const orders = await this.prisma.order.findMany({
+        where: {
+          userId: sub,
+        },
         include: {
           orderItems: true,
           deliveryAddress: true,
-          user: {
-            select: {
-              firstName: true,
-              lastName: true,
-              email: true,
-              mobile: true,
-            },
-          },
+        },
+        take: Number(limit),
+        skip: Number(offset),
+      });
+
+      const totalOrders = await this.prisma.order.count({
+        where: {
+          userId: sub,
         },
       });
-      return { firstName: firstName, orders };
+      const totalPages = Math.ceil(totalOrders / limit);
+      const lastPage = totalPages === 0 ? 1 : totalPages;
+
+      await this.cacheManager.set(
+        cacheKey,
+        { firstName, orders, meta: { totalPages, totalOrders, lastPage } },
+        0, // no TTL
+      );
+
+      return {
+        firstName: firstName,
+        orders,
+        meta: { totalPages, totalOrders, lastPage },
+      };
+    } catch (error) {
+      console.log(error);
+      throw new InternalServerErrorException();
     }
-
-    const orders = await this.prisma.order.findMany({
-      where: {
-        userId: sub,
-      },
-      include: {
-        orderItems: true,
-        deliveryAddress: true,
-      },
-    });
-
-    return { firstName: firstName, orders };
   }
 
   async getOrderById(
@@ -67,6 +157,16 @@ export class OrderService {
     req: JwtUser,
   ): Promise<{ order: object; products: any[] }> {
     const { isAdmin, isManager, sub } = req;
+    const cacheKey = `order:${id}`;
+
+    const cachedOrder = await this.cacheManager.get<{
+      order: object;
+      products: any[];
+    }>(cacheKey);
+    if (cachedOrder) {
+      return cachedOrder;
+    }
+
     if (isAdmin || isManager) {
       const order = await this.prisma.order.findUnique({
         where: {
@@ -112,6 +212,12 @@ export class OrderService {
         orderedProducts.push(product);
       }
 
+      await this.cacheManager.set(
+        cacheKey,
+        { order, products: orderedProducts },
+        2_600_000,
+      );
+
       return { order: order, products: orderedProducts };
     }
 
@@ -156,7 +262,11 @@ export class OrderService {
 
       orderedProducts.push(product);
     }
-
+    await this.cacheManager.set(
+      cacheKey,
+      { order, products: orderedProducts },
+      2_600_000,
+    );
     return { order: order, products: orderedProducts };
   }
 
@@ -186,6 +296,10 @@ export class OrderService {
         id: Number(id),
       },
     });
+
+    //clear order cache
+    await this.cacheManager.del(`order:${id}`);
+    await this.bumpOrderCacheVersion();
 
     return { message: Message.success };
   }
@@ -301,6 +415,10 @@ export class OrderService {
       },
     });
 
+    //clear order cache
+    await this.cacheManager.del(`order:${id}`);
+    await this.bumpOrderCacheVersion();
+
     //send a successful email to the user
     await this.emailService.mailHandler(
       'Order Status Updated Successfully',
@@ -393,6 +511,9 @@ export class OrderService {
         data: { quantity: { decrement: Number(cartItem.quantity) } },
       });
     }
+
+    //clear order cache
+    await this.bumpOrderCacheVersion();
 
     //send a successful email to the user
     await this.emailService.mailHandler(

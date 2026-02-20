@@ -30,7 +30,7 @@ export class UserService {
     const cachedUsers = await this.cacheManager.get(cacheKey);
 
     if (cachedUsers) {
-      console.log('⚡ Returning users from Redis cache');
+      // console.log('⚡ Returning users from Redis cache');
       return cachedUsers;
     }
 
@@ -44,7 +44,7 @@ export class UserService {
     });
 
     // 💾 Step 3: Save to cache for 60 seconds
-    await this.cacheManager.set(cacheKey, users, 60_000);
+    await this.cacheManager.set(cacheKey, users, 2_600_000);
 
     return users;
   }
@@ -73,7 +73,7 @@ export class UserService {
         }
       | undefined = await this.cacheManager.get(cacheKey);
     if (cachedUser) {
-      console.log('⚡ User returned from Redis cache');
+      // console.log('⚡ User returned from Redis cache');
       return cachedUser;
     }
     const found = await this.prisma.user.findFirst({
@@ -93,7 +93,7 @@ export class UserService {
       throw new NotFoundException('User not found');
     } else {
       // 💾 3. Store in Redis for 60 * 60 seconds
-      await this.cacheManager.set(cacheKey, found, 60 * 60_000);
+      await this.cacheManager.set(cacheKey, found, 2_600_000);
 
       return found;
     }
@@ -145,7 +145,7 @@ export class UserService {
     >(cacheKey);
 
     if (cachedUsers) {
-      console.log('⚡ Returning users from Redis cache');
+      // console.log('⚡ Returning users from Redis cache');
       return cachedUsers;
     }
 
@@ -165,7 +165,7 @@ export class UserService {
     }
 
     // 💾 Step 3: Save to cache for 60 seconds
-    await this.cacheManager.set(cacheKey, users, 600_000);
+    await this.cacheManager.set(cacheKey, users, 2_600_000);
 
     return users;
   }

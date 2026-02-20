@@ -7,6 +7,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -18,6 +19,7 @@ import { AdminOnly } from 'src/auth/guards/admin-decorator';
 import { UpdateOrderDto } from './dto/update-order.dto';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { ResponseMessage } from 'src/helpers/message.interface';
+import { QueryOrderDto } from './dto/query-orders.dto';
 
 @Controller('order')
 export class OrderController {
@@ -29,19 +31,19 @@ export class OrderController {
   @Get()
   async getAllOrders(
     @Req() req: Request & { user: JwtUser },
-  ): Promise<{ firstName: string; orders: any[] }> {
+    @Query() queryOrderDto: QueryOrderDto,
+  ): Promise<{
+    firstName: string;
+    orders: any[];
+    meta: { totalPages: number; totalOrders: number; lastPage: number };
+  }> {
     const { isAdmin, isManager, firstName, sub, email, lastName, mobile } =
       req.user; // now typed as JwtUser, safe to destructure
 
-    return this.orderService.getAllOrders({
-      isAdmin,
-      isManager,
-      firstName,
-      sub,
-      lastName,
-      mobile,
-      email,
-    });
+    return this.orderService.getAllOrders(
+      { isAdmin, isManager, firstName, sub, email, lastName, mobile },
+      queryOrderDto,
+    );
   }
 
   //protect this route

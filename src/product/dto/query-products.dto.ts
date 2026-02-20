@@ -15,9 +15,12 @@ export class QueryProductDto {
   // @IsNotEmpty()
   maxPrice: string;
 
-  @IsNotEmpty()
+  @IsOptional()
+  isFeatured: string;
+
+  @IsOptional()
   page: number = 1;
 
-  @IsNotEmpty()
-  limit: number = 5;
+  @IsOptional()
+  limit: number = 20;
 }
