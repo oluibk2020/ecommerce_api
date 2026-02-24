@@ -192,3 +192,13 @@ model Order{
 
   @@map("orders")
 }
+
+model DiscountManager {
+  id Int @id @default(autoincrement())
+  percentageAmount Int @default(5)
+  isActivated Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime? @updatedAt
+
+  @@map("discount_manager")
+}

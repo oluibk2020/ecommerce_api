@@ -22,6 +22,7 @@ import {
 } from './dto/product.dto';
 import { QueryProductDto } from './dto/query-products.dto';
 import { ResponseMessage } from 'src/helpers/message.interface';
+import { ProductDiscountDto } from './dto/product-discount.dto';
 
 @Controller('product')
 export class ProductController {
@@ -53,6 +54,20 @@ export class ProductController {
     return this.productService.deleteProductById(Number(productId));
   }
 
+  @Get('/discount-status')
+  async getProductDiscount(): Promise<ProductDiscountDto> {
+    return this.productService.getProductDiscount();
+  }
+
+  @AdminOnly()
+  @Patch('/manage-discount')
+  async manageProductDiscount(
+    @Body() productDiscountDto: ProductDiscountDto,
+  ): Promise<ResponseMessage> {
+    
+    return this.productService.manageProductDiscount(productDiscountDto);
+  }
+
   @Get('/s')
   async queryProducts(@Query() queryProductDto: QueryProductDto): Promise<{
     products: ProductWithIdDto[];
@@ -60,22 +75,6 @@ export class ProductController {
   }> {
     return this.productService.queryProducts(queryProductDto);
   }
-
-  // @Get()
-  // async getAllProducts(): Promise<{
-  //   data: ProductWithIdDto[];
-  //   meta: { total: number; lastPage: number; page: number };
-  // }> {
-  //   return this.productService.getAllProducts();
-  // }
-
-  // @Get('/featured')
-  // async getAllFeaturedProducts(): Promise<{
-  //   data: FeaturedProductWithIdDto[];
-  //   meta: { total: number; lastPage: number; page: number };
-  // }> {
-  //   return this.productService.getAllFeaturedProducts();
-  // }
 
   @Get('/:id')
   async getProductById(@Param('id') id: string): Promise<ProductWithIdDto> {

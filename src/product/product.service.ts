@@ -7,7 +7,6 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import {
   CreateProductDto,
-  FeaturedProductWithIdDto,
   ProductDto,
   ProductWithIdDto,
 } from './dto/product.dto';
@@ -15,6 +14,7 @@ import { QueryProductDto } from './dto/query-products.dto';
 import { Message, ResponseMessage } from 'src/helpers/message.interface';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
+import { ProductDiscountDto } from './dto/product-discount.dto';
 
 @Injectable()
 export class ProductService {
@@ -42,117 +42,6 @@ export class ProductService {
     return version ?? 1;
   }
 
-  // async getAllProducts(
-  //   page = 1,
-  //   limit = 20,
-  // ): Promise<{
-  //   data: ProductWithIdDto[];
-  //   meta: { total: number; lastPage: number; page: number };
-  // }> {
-  //   const skip = (page - 1) * limit;
-  //   const cacheKey = `products_page_${page}_limit_${limit}`;
-
-  //   const cachedProducts = await this.cacheManager.get<{
-  //     data: ProductWithIdDto[];
-  //     meta: { total: number; lastPage: number; page: number };
-  //   }>(cacheKey);
-
-  //   if (cachedProducts) {
-  //     return cachedProducts;
-  //   }
-  //   const products = await this.prisma.product.findMany({
-  //     select: {
-  //       id: true,
-  //       title: true,
-  //       price: true,
-  //       imageUrl: true,
-  //       description: true,
-  //       quantity: true,
-  //       cost: true,
-  //     },
-  //     skip: skip,
-  //     take: limit,
-  //   });
-
-  //   if (!products) {
-  //     throw new NotFoundException('Product not found');
-  //   } else {
-  //     //get total count of products
-  //     const total = await this.prisma.product.count();
-  //     // 💾 Step 3: Save to cache for 6000 seconds
-
-  //     const response = {
-  //       data: products,
-  //       meta: {
-  //         total,
-  //         page,
-  //         lastPage: Math.ceil(total / limit),
-  //       },
-  //     };
-  //     await this.cacheManager.set(cacheKey, response, 6_000_000_000_000_000);
-  //     return response;
-  //   }
-  // }
-
-  // async getAllFeaturedProducts(
-  //   page = 1,
-  //   limit = 20,
-  // ): Promise<{
-  //   data: FeaturedProductWithIdDto[];
-  //   meta: { total: number; lastPage: number; page: number };
-  // }> {
-  //   const skip = (page - 1) * limit;
-  //   const cacheKey = `products_page_${page}_limit_${limit}`;
-
-  //   const cachedProducts = await this.cacheManager.get<{
-  //     data: FeaturedProductWithIdDto[];
-  //     meta: { total: number; lastPage: number; page: number };
-  //   }>(cacheKey);
-
-  //   if (cachedProducts) {
-  //     return cachedProducts;
-  //   }
-  //   const products = await this.prisma.product.findMany({
-  //     select: {
-  //       id: true,
-  //       title: true,
-  //       price: true,
-  //       imageUrl: true,
-  //       description: true,
-  //       quantity: true,
-  //       featured: true,
-  //       cost: true,
-  //     },
-  //     where: {
-  //       featured: true,
-  //     },
-  //     skip: skip,
-  //     take: limit,
-  //   });
-
-  //   if (!products) {
-  //     throw new NotFoundException('No featured Product found');
-  //   } else {
-  //     //get total count of featured products
-  //     const total = await this.prisma.product.count({
-  //       where: {
-  //         featured: true,
-  //       },
-  //     });
-  //     // 💾 Step 3: Save to cache for 6000 seconds
-  //     const response = {
-  //       data: products,
-  //       meta: {
-  //         total,
-  //         page,
-  //         lastPage: Math.ceil(total / limit),
-  //       },
-  //     };
-  //     await this.cacheManager.set(cacheKey, response, 6_000_000_000_000_000);
-  //     return response;
-  //   }
-  // }
-
   async getProductById(id: number): Promise<ProductWithIdDto> {
     const cacheKey = `product:${id}`;
 
@@ -174,6 +63,12 @@ export class ProductService {
         description: true,
         quantity: true,
         cost: true,
+        category: {
+          select: {
+            id: true,
+            title: true,
+          },
+        },
       },
     });
 
@@ -261,6 +156,12 @@ export class ProductService {
           quantity: true,
           featured: true,
           cost: true,
+          category: {
+            select: {
+              id: true,
+              title: true,
+            },
+          },
         },
         take: Number(limit), // Number of results per page
         skip: Number(offset), // Skip the appropriate number of results
@@ -373,6 +274,86 @@ export class ProductService {
 
       return { message: Message.success };
     } catch (error) {
+      console.log(error);
+      throw new InternalServerErrorException();
+    }
+  }
+
+  async manageProductDiscount(
+    productDiscountDto: ProductDiscountDto,
+  ): Promise<ResponseMessage> {
+    const { isActivated, percentageAmount } = productDiscountDto;
+
+    try {
+      // Fetch the current discount manager state from the database
+      let discountManager = await this.prisma.discountManager.findFirst({
+        select: {
+          id: true,
+          percentageAmount: true,
+          isActivated: true,
+        },
+      });
+
+      if (!discountManager) {
+        discountManager = await this.prisma.discountManager.create({
+          data: {
+            percentageAmount,
+            isActivated,
+          },
+        });
+      } else {
+        discountManager = await this.prisma.discountManager.update({
+          where: {
+            id: discountManager.id,
+          },
+          data: {
+            percentageAmount,
+            isActivated,
+          },
+        });
+      }
+
+      //clear discount manager cache
+      await this.cacheManager.del('discount_manager');
+
+      return { message: Message.success };
+    } catch (error) {
+      console.error('Error managing product discount:', error);
+      throw new InternalServerErrorException(
+        'Failed to manage product discount',
+      );
+    }
+  }
+
+  async getProductDiscount(): Promise<ProductDiscountDto> {
+    const cacheKey = 'discount_manager';
+
+    try {
+      const cachedDiscount =
+        await this.cacheManager.get<ProductDiscountDto>(cacheKey);
+
+      if (cachedDiscount) {
+        return cachedDiscount;
+      }
+
+      const discountManager = await this.prisma.discountManager.findFirst({
+        select: {
+          percentageAmount: true,
+          isActivated: true,
+        },
+      });
+
+      if (!discountManager) {
+        throw new NotFoundException('Discount manager not found');
+      }
+
+      await this.cacheManager.set(cacheKey, discountManager, 2_600_000);
+
+      return discountManager;
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
       console.log(error);
       throw new InternalServerErrorException();
     }
