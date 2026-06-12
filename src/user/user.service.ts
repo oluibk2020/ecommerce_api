@@ -203,6 +203,7 @@ export class UserService {
       if ((error as PostgresError).code === 'P2002') {
         throw new ConflictException('Email already exists');
       } else {
+        console.log(error);
         throw new InternalServerErrorException();
       }
     }

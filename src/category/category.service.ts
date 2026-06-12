@@ -55,7 +55,7 @@ export class CategoryService {
     const { title, description } = createCategoryDto;
     const formatTitle = title.toLowerCase();
     const formatDescription = description.toLowerCase();
-    const category = this.prisma.category.create({
+    const category = await this.prisma.category.create({
       data: {
         title: formatTitle,
         description: formatDescription,
